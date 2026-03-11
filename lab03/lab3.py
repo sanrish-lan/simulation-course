@@ -2,20 +2,19 @@ import customtkinter as ctk
 import numpy as np
 from PIL import Image, ImageTk
 
-# Константы состояний клеток
+
 EMPTY = 0
 TREE = 1
 BURNING = 2
 ASH = 3
 OBSTACLE = 4
 
-# Цвета для отрисовки (RGB)
 COLORS = np.array([
-    [40, 30, 20],  # 0: Земля (Темно-коричневая)
-    [34, 139, 34],  # 1: Дерево (Зеленый)
-    [255, 255, 0],  # 2: Огонь (ЯРКО-ЖЕЛТЫЙ)
-    [90, 90, 90],  # 3: Пепел (Темно-серый)
-    [30, 144, 255]  # 4: Вода (Синий)
+    [40, 30, 20],
+    [34, 139, 34],
+    [255, 255, 0],
+    [90, 90, 90],
+    [30, 144, 255]
 ], dtype=np.uint8)
 
 
@@ -29,7 +28,6 @@ class UltimateForestFireApp(ctk.CTk):
         self.grid_size = 150
         self.is_running = False
 
-        # Направление ветра (векторы)
         self.wind_dx = 0
         self.wind_dy = 0
         self.wind_buttons = {}
@@ -37,9 +35,9 @@ class UltimateForestFireApp(ctk.CTk):
         self.grid = np.zeros((self.grid_size, self.grid_size), dtype=np.int8)
         self.burn_time = np.zeros((self.grid_size, self.grid_size), dtype=np.int8)
 
-        # Переменные для инструментов рисования
+
         self.draw_mode = ctk.IntVar(value=BURNING)
-        self.brush_size_var = ctk.IntVar(value=0)  # 0: 1x1, 1: 3x3, 2: 5x5
+        self.brush_size_var = ctk.IntVar(value=0)
 
         self.setup_ui()
         self.generate_natural_terrain()
@@ -58,7 +56,7 @@ class UltimateForestFireApp(ctk.CTk):
                                        command=self.generate_natural_terrain)
         self.btn_reset.pack(pady=5, fill="x", padx=10)
 
-        # Роза Ветров
+
         ctk.CTkLabel(self.sidebar, text="Направление ветра", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5))
         wind_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         wind_frame.pack(pady=5)
@@ -93,7 +91,7 @@ class UltimateForestFireApp(ctk.CTk):
         self.slider_f.set(0.00005)
         self.slider_f.pack(fill="x", padx=10)
 
-        # Выбор материала кисти
+
         ctk.CTkLabel(self.sidebar, text="Кисть:", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5))
         ctk.CTkRadioButton(self.sidebar, text="Огонь (Желтый)", variable=self.draw_mode, value=BURNING).pack(anchor="w",
                                                                                                              padx=20,
@@ -107,7 +105,7 @@ class UltimateForestFireApp(ctk.CTk):
                                                                                                            padx=20,
                                                                                                            pady=2)
 
-        # Выбор размера кисти
+
         ctk.CTkLabel(self.sidebar, text="Размер кисти:", font=ctk.CTkFont(weight="bold")).pack(pady=(15, 5))
         brush_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         brush_frame.pack(fill="x", padx=20)
@@ -118,7 +116,7 @@ class UltimateForestFireApp(ctk.CTk):
                                                                                                 padx=(0, 10))
         ctk.CTkRadioButton(brush_frame, text="5x5", variable=self.brush_size_var, value=2).pack(side="left")
 
-        # Настройка холста (Канвас)
+
         self.canvas_frame = ctk.CTkFrame(self)
         self.canvas_frame.pack(side="right", expand=True, fill="both", padx=10, pady=10)
 
@@ -164,12 +162,12 @@ class UltimateForestFireApp(ctk.CTk):
         col = int(event.x / (w / self.grid_size))
         row = int(event.y / (h / self.grid_size))
 
-        # Получаем радиус из радиокнопок: 0=1x1, 1=3x3, 2=5x5
+
         brush_radius = self.brush_size_var.get()
         val = self.draw_mode.get()
 
         if 0 <= row < self.grid_size and 0 <= col < self.grid_size:
-            # Если радиус 0, рисуем одну клетку (1x1)
+
             if brush_radius == 0:
                 self.grid[row, col] = val
                 if val == BURNING:
@@ -177,7 +175,7 @@ class UltimateForestFireApp(ctk.CTk):
                 else:
                     self.burn_time[row, col] = 0
             else:
-                # Рисуем квадрат размером (2*radius + 1)
+
                 r_start = max(0, row - brush_radius)
                 r_end = min(self.grid_size, row + brush_radius + 1)
                 c_start = max(0, col - brush_radius)
@@ -226,7 +224,7 @@ class UltimateForestFireApp(ctk.CTk):
 
         is_burn_int = is_burning.astype(float)
 
-        # Соседи (Окрестность фон Неймана)
+
         N = np.roll(is_burn_int, 1, axis=0)
         N[0, :] = 0
         S = np.roll(is_burn_int, -1, axis=0)
@@ -236,7 +234,7 @@ class UltimateForestFireApp(ctk.CTk):
         E = np.roll(is_burn_int, -1, axis=1)
         E[:, -1] = 0
 
-        # Искры (Огонь на расстоянии 2 клеток)
+
         N2 = np.roll(is_burn_int, 2, axis=0)
         N2[0:2, :] = 0
         S2 = np.roll(is_burn_int, -2, axis=0)
@@ -246,11 +244,11 @@ class UltimateForestFireApp(ctk.CTk):
         E2 = np.roll(is_burn_int, -2, axis=1)
         E2[:, -2:] = 0
 
-        # Базовое давление огня
+
         fire_pressure = (N + S + W + E) * 0.15
         spark_pressure = (N2 + S2 + W2 + E2) * 0.01
 
-        # Вектор ветра
+
         if self.wind_dx > 0:
             fire_pressure += W * wind_str
             spark_pressure += W2 * wind_str * 0.5
