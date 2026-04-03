@@ -10,6 +10,30 @@ from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 SYMBOLS = ["🍒", "🍋", "🍊", "🍇", "💎", "🎰"]
 PAYOUTS = {"🍒": 5, "🍋": 10, "🍊": 15, "🍇": 20, "💎": 50, "🎰": 100}
 
+def get_yes_no(p=0.5):
+    return "ДА" if random.random() < p else "НЕТ"
+
+
+def get_weighted_symbol(symbols, weights):
+    m = len(symbols)
+    total_weight = sum(weights)
+
+    alpha = random.random()
+    cumulative_p = 0.0
+
+    for k in range(m):
+        p_i = weights[k] / total_weight
+        cumulative_p += p_i
+
+        if alpha < cumulative_p:
+            return symbols[k]
+
+    return symbols[-1]
+
+
+def get_casino_result(symbols, weights):
+    return [get_weighted_symbol(symbols, weights) for _ in range(3)]
+
 STYLE = """
 QMainWindow { background-color: #0d0d0d }
 QTabWidget::pane { border: 2px solid #5e4d1a; background: #121212; border-radius: 10px }
@@ -166,7 +190,6 @@ class CasinoTab(QWidget):
             sb = QSpinBox()
             sb.setRange(1, 100)
             sb.setValue(1)
-            # УБИРАЕМ СТРЕЛОЧКИ
             sb.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
             sb.valueChanged.connect(self.update_percents)
             pl = QLabel("0.0%")
@@ -179,7 +202,6 @@ class CasinoTab(QWidget):
         layout.addWidget(w_box)
         self.update_percents()
 
-        # Настройка звуков
         self.spin_player = QMediaPlayer()
         self.spin_audio = QAudioOutput()
         self.spin_player.setAudioOutput(self.spin_audio)
@@ -218,16 +240,9 @@ class CasinoTab(QWidget):
         self.btn_spin.setEnabled(False)
         self.lbl_status.setText("ВРАЩЕНИЕ...")
 
-        total = sum(sb.value() for sb in self.inputs)
+        current_weights = [sb.value() for sb in self.inputs]
+        self.res = get_casino_result(SYMBOLS, current_weights)
 
-        def calc():
-            a, c = random.random(), 0
-            for k, sb in enumerate(self.inputs):
-                c += sb.value() / total
-                if a < c: return SYMBOLS[k]
-            return SYMBOLS[-1]
-
-        self.res = [calc() for _ in range(3)]
         for r in self.reels:
             r.state = "spinning"
             r.timer.start(16)
@@ -238,13 +253,10 @@ class CasinoTab(QWidget):
 
     def animate_tick(self):
         self.ticks += 1
-        # Остановка 1: 2.5с (156 тиков)
         if self.ticks == 156:
             self.reels[0].set_final_symbol(self.res[0])
-        # Остановка 2: 4.0с (250 тиков)
         elif self.ticks == 250:
             self.reels[1].set_final_symbol(self.res[1])
-        # Остановка 3: 5.5с (344 тика)
         elif self.ticks == 344:
             self.reels[2].set_final_symbol(self.res[2])
 
@@ -307,7 +319,9 @@ class YesNoTab(QWidget):
             self.lbl_res.setText(random.choice(["ДА", "НЕТ"]))
         else:
             self.timer.stop()
-            res = "ДА" if random.random() > 0.5 else "НЕТ"
+
+            res = get_yes_no(0.5)
+
             self.lbl_res.setText(res)
             self.set_color("#2ecc71" if res == "ДА" else "#e74c3c")
             self.btn_ask.setEnabled(True)
@@ -324,18 +338,15 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.t1, "🔮 ОРАКУЛ")
         self.tabs.addTab(self.t2, "🎰 СЛОТЫ")
         self.setCentralWidget(self.tabs)
-        # Фильтр событий для управления с клавиатуры
         QApplication.instance().installEventFilter(self)
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Type.KeyPress:
             if event.key() in (Qt.Key.Key_Space, Qt.Key.Key_Return, Qt.Key.Key_Enter):
-                # Снимаем фокус с полей ввода, чтобы данные применились
                 focused = QApplication.focusWidget()
                 if isinstance(focused, QSpinBox):
                     focused.clearFocus()
 
-                # Запуск действия в зависимости от вкладки
                 if self.tabs.currentIndex() == 1:
                     self.t2.start_spin()
                 else:
