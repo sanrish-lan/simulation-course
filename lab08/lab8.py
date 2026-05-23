@@ -1,6 +1,5 @@
 import sys
 import math
-from collections import Counter
 
 import numpy as np
 
@@ -28,13 +27,15 @@ from PyQt6.QtWidgets import (
     QDoubleSpinBox
 )
 
+class Counter(dict):
+    def __init__(self, iterable=None):
+        super().__init__()
+        if iterable is not None:
+            for item in iterable:
+                self[item] = self.get(item, 0) + 1
 
-# =====================================================================
-# ОСТАВЛЕНО БЕЗ ИЗМЕНЕНИЙ (Вычислительная логика)
-# =====================================================================
 
 def simulate_poisson_stream(lmbda, T):
-    """Моделирует один прогон. Возвращает список моментов времени поступления заявок."""
     t = 0.0
     arrivals = []
     while True:
@@ -46,7 +47,6 @@ def simulate_poisson_stream(lmbda, T):
 
 
 def get_theoretical_probs(lmbda, T, max_k):
-    """Возвращает словарь с теоретическими вероятностями Пуассона до k = max_k"""
     mu = lmbda * T
     probs = {}
     for k in range(max_k + 1):
@@ -58,16 +58,12 @@ def get_theoretical_probs(lmbda, T, max_k):
 
 
 def calculate_empirical_stats(all_counts):
-    """Считает эмпирическое среднее, дисперсию и частоты"""
     emp_mean = np.mean(all_counts)
     emp_var = np.var(all_counts, ddof=1) if len(all_counts) > 1 else 0.0
     freqs = dict(Counter(all_counts))
     return emp_mean, emp_var, freqs
 
 
-# =====================================================================
-# ТАБЛИЦА СТИЛЕЙ (QSS)
-# =====================================================================
 
 APP_STYLE = """
 QMainWindow {
@@ -150,10 +146,6 @@ QToolBar#ChartToolbar QLabel {
 """
 
 
-# =====================================================================
-# КОМПОНЕНТЫ ИНТЕРФЕЙСА
-# =====================================================================
-
 class StatCard(QFrame):
     def __init__(self, label):
         super().__init__()
@@ -228,7 +220,6 @@ class PoissonChart(FigureCanvas):
         super().__init__(self.fig)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
-        # Предохранитель рекурсии и инициализация эталонных границ
         self._lock_active = False
         self._prev_xlim = (0.0, 1.0)
         self._prev_ylim = (0.0, 1.0)
@@ -236,7 +227,6 @@ class PoissonChart(FigureCanvas):
         self._style_ax_empty()
         self.draw()
 
-        # Связываем событие прокрутки мыши для зума
         self.fig.canvas.mpl_connect('scroll_event', self.on_scroll)
 
     def _style_base(self):
@@ -257,19 +247,15 @@ class PoissonChart(FigureCanvas):
         self.ax.set_ylabel("Вероятность P(X = k)", color="#64748b", fontsize=9)
         self._style_base()
 
-        # Фиксируем границы по умолчанию
         self._prev_xlim = self.ax.get_xlim()
         self._prev_ylim = self.ax.get_ylim()
 
-        # Подключаем слежение на пустом графике
         self.ax.callbacks.connect('xlim_changed', self.on_xlim_changed)
         self.ax.callbacks.connect('ylim_changed', self.on_ylim_changed)
 
     def draw_distribution(self, freqs, N, mu, lmbda, T):
-        # 1. Очищаем холст (это также сбросит старые callbacks, предотвращая конфликты автоскейла)
         self.ax.clear()
 
-        # 2. Строим распределение
         max_k = max(freqs.keys()) if freqs else 0
         ks = list(range(max_k + 2))
         emp = [freqs.get(k, 0) / N for k in ks]
@@ -301,7 +287,6 @@ class PoissonChart(FigureCanvas):
             zorder=3,
         )
 
-        # 3. Текстовое оформление и легенда
         self.ax.set_title(
             f"Распределение вероятностей событий  (λ={lmbda}, T={T}с, N={N})",
             color="#f3f4f6",
@@ -321,30 +306,24 @@ class PoissonChart(FigureCanvas):
             loc="upper right"
         )
 
-        # 4. Корректируем автоматические отступы Matplotlib (срезаем уход в минус)
         xlim = self.ax.get_xlim()
         ylim = self.ax.get_ylim()
 
-        # Задаем жесткий нижний порог (-0.5 для X, чтобы нулевой столбец не обрезался, и 0.0 для Y)
         new_xmin = max(-0.5, xlim[0])
         new_ymin = max(0.0, ylim[0])
 
         self.ax.set_xlim(new_xmin, xlim[1])
         self.ax.set_ylim(new_ymin, ylim[1])
 
-        # 5. Запоминаем эти идеальные стартовые границы как эталон
         self._prev_xlim = self.ax.get_xlim()
         self._prev_ylim = self.ax.get_ylim()
 
-        # 6. Только теперь заново подключаем слежение за границами для интерактивного панорирования/зума
         self.ax.callbacks.connect('xlim_changed', self.on_xlim_changed)
         self.ax.callbacks.connect('ylim_changed', self.on_ylim_changed)
 
-        # 7. Финальное обновление холста
         self.draw()
 
     def on_xlim_changed(self, event):
-        """Блокирует смещение по оси X влево дальше нуля (с учетом красивого отступа -0.5)"""
         if self._lock_active:
             return
         xlim = self.ax.get_xlim()
@@ -356,11 +335,10 @@ class PoissonChart(FigureCanvas):
             self._prev_xlim = xlim
 
     def on_ylim_changed(self, event):
-        """Блокирует смещение по оси Y вниз дальше абсолютного нуля"""
         if self._lock_active:
             return
         ylim = self.ax.get_ylim()
-        if ylim[0] < -0.01:  # -0.01 — технический допуск для корректной прорисовки оси
+        if ylim[0] < -0.01:
             self._lock_active = True
             self.ax.set_ylim(self._prev_ylim)
             self._lock_active = False
@@ -368,7 +346,6 @@ class PoissonChart(FigureCanvas):
             self._prev_ylim = ylim
 
     def on_scroll(self, event):
-        """Плавное интерактивное масштабирование колесиком мыши"""
         if event.inaxes != self.ax:
             return
 
@@ -409,14 +386,10 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(16, 16, 16, 16)
         main_layout.setSpacing(16)
 
-        # -----------------------------------------------------------------
-        # ЛЕВАЯ ПАНЕЛЬ: УПРАВЛЕНИЕ И СТАТИСТИКА (Без лишних верхних заголовков)
-        # -----------------------------------------------------------------
         sidebar = QVBoxLayout()
         sidebar.setContentsMargins(0, 0, 0, 0)
         sidebar.setSpacing(16)
 
-        # Карточка параметров
         ctrl_card = QFrame()
         ctrl_card.setObjectName("Card")
         ctrl_layout = QVBoxLayout(ctrl_card)
@@ -442,7 +415,6 @@ class MainWindow(QMainWindow):
 
         sidebar.addWidget(ctrl_card)
 
-        # Карточка статистических результатов
         stats_card = QFrame()
         stats_card.setObjectName("Card")
         stats_layout = QVBoxLayout(stats_card)
@@ -472,13 +444,9 @@ class MainWindow(QMainWindow):
         sidebar.addStretch()
         main_layout.addLayout(sidebar, 0)
 
-        # -----------------------------------------------------------------
-        # ПРАВАЯ ПАНЕЛЬ: ГРАФИК И ТЕКСТОВЫЙ ВЫВОД
-        # -----------------------------------------------------------------
         right_panel = QVBoxLayout()
         right_panel.setSpacing(16)
 
-        # Контейнер для графика
         chart_frame = QFrame()
         chart_frame.setObjectName("Card")
         chart_layout = QVBoxLayout(chart_frame)
@@ -487,7 +455,6 @@ class MainWindow(QMainWindow):
 
         self.chart = PoissonChart()
 
-        # Интеграция панели инструментов навигации Matplotlib (Zoom / Pan)
         self.toolbar = NavigationToolbar(self.chart, self)
         self.toolbar.setObjectName("ChartToolbar")
 
@@ -495,7 +462,6 @@ class MainWindow(QMainWindow):
         chart_layout.addWidget(self.chart)
         right_panel.addWidget(chart_frame, 1)
 
-        # Панель вывода аналитического заключения
         conclusion_frame = QFrame()
         conclusion_frame.setObjectName("ConclusionCard")
         conclusion_layout = QHBoxLayout(conclusion_frame)
